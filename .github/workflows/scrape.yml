@@ -1,0 +1,64 @@
+name: Scrape Kindle
+
+on:
+  workflow_dispatch:
+    inputs:
+      list_url:
+        description: "URL de la lista de bestsellers de la categoria"
+        required: true
+      pages:
+        description: "Paginas de lista"
+        default: "1"
+      max_books:
+        description: "Maximo de libros (0 = sin limite)"
+        default: "5"
+      domain:
+        description: "amazon.com o amazon.es"
+        default: "amazon.com"
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
+
+      - name: Scrapear
+        env:
+          LIST_URL: ${{ inputs.list_url }}
+          PAGES: ${{ inputs.pages }}
+          MAX_BOOKS: ${{ inputs.max_books }}
+          DOMAIN: ${{ inputs.domain }}
+        run: |
+          python amazon_category_scraper.py scrape \
+            --list-url "$LIST_URL" \
+            --pages "$PAGES" \
+            --max-books "$MAX_BOOKS" \
+            --domain "$DOMAIN" \
+            --out resultado.csv
+
+      - name: Analizar
+        if: always()
+        run: |
+          if [ -f resultado.csv ]; then
+            python amazon_category_scraper.py analyze resultado.csv
+          fi
+
+      - name: Guardar resultados
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultados
+          path: |
+            resultado.csv
+            resultado_huecos.csv
+          if-no-files-found: warn
